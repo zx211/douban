@@ -1,5 +1,5 @@
-name = "db"                        # Worker 名称
-main = "functions/worker.js"       # 你的 Worker 脚本文件
+name = "db"
+main = "functions/worker.js"
 account_id = "ad3a38e4e4cba364bc119216eda22dd8"
-workers_dev = true                  # 开启 workers.dev 子域名
+workers_dev = true
 compatibility_date = "2025-11-20"
