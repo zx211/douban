@@ -10,12 +10,10 @@ async function handleRequest(request) {
     return new Response("Missing 'url' parameter", { status: 400 })
   }
 
-  // 自动编码 URL（避免特殊字符导致问题）
+  // 自动处理 URL 特殊字符
   try {
     target = encodeURI(target)
-  } catch (e) {
-    // 如果 encode 失败，也不影响
-  }
+  } catch (e) {}
 
   try {
     const res = await fetch(target, {
@@ -26,7 +24,7 @@ async function handleRequest(request) {
     })
 
     const newHeaders = new Headers(res.headers)
-    newHeaders.set("Access-Control-Allow-Origin", "*") // 跨域
+    newHeaders.set("Access-Control-Allow-Origin", "*")
 
     return new Response(res.body, {
       status: res.status,
