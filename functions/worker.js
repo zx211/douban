@@ -1,7 +1,3 @@
-const ALLOWED_IPS = [
-  '你的服务器公网IP'  // 只有这个 IP 可以访问
-];
-
 const NODES = [
   'https://img1.doubanio.com',
   'https://img2.doubanio.com',
@@ -9,16 +5,21 @@ const NODES = [
   'https://img9.doubanio.com'
 ];
 
+// 你的服务器 IP，只有这个 IP 可以访问
+const ALLOWED_IP = '134.122.153.28';
+
 export default {
   async fetch(request) {
-    const clientIP = request.headers.get('CF-Connecting-IP');
-    if (!ALLOWED_IPS.includes(clientIP)) {
-      return new Response('禁止访问', { status: 403 });
+    const clientIP = request.headers.get('cf-connecting-ip');
+    if (clientIP !== ALLOWED_IP) {
+      return new Response('Forbidden', { status: 403 });
     }
 
     const url = new URL(request.url);
     const targetUrl = url.searchParams.get('url');
-    if (!targetUrl) return new Response('缺少 url 参数', { status: 400 });
+    if (!targetUrl) {
+      return new Response('缺少 url 参数', { status: 400 });
+    }
 
     // 随机节点顺序，保证轮换
     const nodes = [...NODES].sort(() => Math.random() - 0.5);
@@ -35,6 +36,27 @@ export default {
               quality: 75       // 压缩质量
             }
           }
+        };
+
+        const res = await fetch(newUrl, cfOptions);
+        if (!res.ok) continue;
+
+        // 设置 CORS + 缓存
+        const headers = new Headers(res.headers);
+        headers.set('Access-Control-Allow-Origin', '*');
+        headers.set('Cache-Control', 'public, max-age=31536000'); // 1 年缓存
+
+        const body = await res.arrayBuffer();
+        return new Response(body, { status: 200, headers });
+      } catch (e) {
+        // 节点失败尝试下一个
+        continue;
+      }
+    }
+
+    return new Response('所有节点请求失败', { status: 502 });
+  }
+};          }
         };
 
         const res = await fetch(newUrl, cfOptions);
