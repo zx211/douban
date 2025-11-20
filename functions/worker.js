@@ -1,37 +1,24 @@
+// functions/worker.js
+// 豆瓣图片代理 Worker
+
 addEventListener("fetch", event => {
   event.respondWith(handleRequest(event.request))
 })
 
 async function handleRequest(request) {
   const url = new URL(request.url)
-  let target = url.searchParams.get("url")
-
+  const target = url.searchParams.get("url")
+  
   if (!target) {
-    return new Response("Missing 'url' parameter", { status: 400 })
+    return new Response("请提供 ?url= 目标图片地址", { status: 400 })
   }
 
-  // 自动处理 URL 特殊字符
   try {
-    target = encodeURI(target)
-  } catch (e) {}
-
-  try {
-    const res = await fetch(target, {
-      headers: {
-        "User-Agent": "Mozilla/5.0",
-        "Referer": "https://movie.douban.com/"
-      }
-    })
-
-    const newHeaders = new Headers(res.headers)
-    newHeaders.set("Access-Control-Allow-Origin", "*") // 跨域
-
-    return new Response(res.body, {
-      status: res.status,
-      statusText: res.statusText,
-      headers: newHeaders
-    })
+    const res = await fetch(target)
+    const headers = new Headers(res.headers)
+    headers.set("Access-Control-Allow-Origin", "*") // 允许跨域
+    return new Response(res.body, { status: res.status, headers })
   } catch (err) {
-    return new Response("Fetch failed: " + err.message, { status: 500 })
+    return new Response("请求失败：" + err, { status: 500 })
   }
 }
