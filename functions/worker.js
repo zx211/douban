@@ -24,7 +24,7 @@ async function handleRequest(request) {
     })
 
     const newHeaders = new Headers(res.headers)
-    newHeaders.set("Access-Control-Allow-Origin", "*")
+    newHeaders.set("Access-Control-Allow-Origin", "*") // 跨域
 
     return new Response(res.body, {
       status: res.status,
