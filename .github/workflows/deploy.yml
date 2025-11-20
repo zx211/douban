@@ -1,26 +1,23 @@
-# 自动部署 Cloudflare Worker
-name: 部署 Worker
+name: Deploy Cloudflare Worker
 
 on:
   push:
-    branches: [main]  # push 到 main 分支时触发
+    branches:
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      # 1️⃣ 拉取代码
-      - name: Checkout repository
+      - name: 拉取仓库
         uses: actions/checkout@v3
 
-      # 2️⃣ 安装 Wrangler
-      - name: 安装 Wrangler
-        run: npm install -g wrangler
-
-      # 3️⃣ 部署 Worker
-      - name: 部署 Worker
-        uses: cloudflare/wrangler-action@2.0.0
+      - name: 安装 Node.js
+        uses: actions/setup-node@v3
         with:
-          apiToken: ${{ secrets.CF_API_TOKEN }}  # GitHub Secrets 中配置的 API Token
-          workingDirectory: .
+          node-version: 20
+
+      - name: 安装 Wrangler 并部署
+        run: npx wrangler deploy
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
