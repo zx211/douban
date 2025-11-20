@@ -1,0 +1,8 @@
+name = "db"          # Worker 名称
+main = "worker.js"          # 你的 Worker 脚本文件
+type = "javascript"
+
+account_id = "ad3a38e4e4cba364bc119216eda22dd8"
+workers_dev = true           # 开启 workers.dev 子域名
+route = ""                   # 如果用自定义域名可以填，否则空
+zone_id = ""                 # 如果用自定义域名可以填，否则空
