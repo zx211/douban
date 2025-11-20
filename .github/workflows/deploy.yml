@@ -2,12 +2,11 @@ name: Deploy Cloudflare Worker
 
 on:
   push:
-    branches: [main]  # push 到 main 分支时触发
+    branches: [main]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -18,5 +17,5 @@ jobs:
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@2.0.0
         with:
-          apiToken: ${{ secrets.CF_API_TOKEN }}  # 在 GitHub Secrets 中设置
+          apiToken: ${{ secrets.CF_API_TOKEN }}  # 引用 GitHub Secrets 中的 API Token
           workingDirectory: .
