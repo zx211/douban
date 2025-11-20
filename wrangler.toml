@@ -1,5 +1,5 @@
 name = "db"          # Worker 名称
-main = "worker.js"          # 你的 Worker 脚本文件
+main = "functions/worker.js"          # 你的 Worker 脚本文件
 type = "javascript"
 
 account_id = "ad3a38e4e4cba364bc119216eda22dd8"
