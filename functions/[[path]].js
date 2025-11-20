@@ -4,10 +4,19 @@ addEventListener("fetch", event => {
 
 async function handleRequest(request) {
   const url = new URL(request.url)
-  const target = url.searchParams.get("url")
-  
-  if (!target) return new Response("Missing 'url' parameter", { status: 400 })
-  
+  let target = url.searchParams.get("url")
+
+  if (!target) {
+    return new Response("Missing 'url' parameter", { status: 400 })
+  }
+
+  // 自动编码 URL（避免特殊字符导致问题）
+  try {
+    target = encodeURI(target)
+  } catch (e) {
+    // 如果 encode 失败，也不影响
+  }
+
   try {
     const res = await fetch(target, {
       headers: {
@@ -15,10 +24,16 @@ async function handleRequest(request) {
         "Referer": "https://movie.douban.com/"
       }
     })
+
     const newHeaders = new Headers(res.headers)
-    newHeaders.set("Access-Control-Allow-Origin", "*")
-    return new Response(res.body, { status: res.status, headers: newHeaders })
+    newHeaders.set("Access-Control-Allow-Origin", "*") // 跨域
+
+    return new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: newHeaders
+    })
   } catch (err) {
-    return new Response("Failed to fetch: " + err.message, { status: 500 })
+    return new Response("Fetch failed: " + err.message, { status: 500 })
   }
 }
