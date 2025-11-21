@@ -8,13 +8,13 @@ const DOUBAN_NODES = [
 export default {
   async fetch(request) {
     const url = new URL(request.url);
-    const target = url.searchParams.get("url");
+    const path = url.pathname; // 保留完整路径，如 /view/photo/s_ratio_poster/public/p2410569290.jpg
 
-    if (!target) return new Response("缺少 ?url=", { status: 400 });
+    if (!path) return new Response("缺少图片路径", { status: 400 });
 
+    // 只允许常见图片格式
     const allowedExt = /\.(jpg|jpeg|png|webp|gif|avif)$/i;
-    const fileName = target.split("/").pop().split("?")[0];
-    if (!allowedExt.test(fileName)) return new Response("仅支持图片格式", { status: 400 });
+    if (!allowedExt.test(path)) return new Response("仅支持图片格式", { status: 400 });
 
     const respHeaders = new Headers();
     respHeaders.set("Access-Control-Allow-Origin", "*");
@@ -22,23 +22,26 @@ export default {
     respHeaders.set("Access-Control-Allow-Methods", "GET, OPTIONS");
     respHeaders.set("Cache-Control", "public, max-age=31536000");
 
+    // OPTIONS 预检请求直接返回
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: respHeaders });
 
     try {
+      // 随机选择豆瓣节点请求图片
+      const nodes = [...DOUBAN_NODES].sort(() => Math.random() - 0.5);
       let finalResp;
-      if (/^https:\/\/img\d\.doubanio\.com/.test(target)) {
-        const nodes = [...DOUBAN_NODES].sort(() => Math.random() - 0.5);
-        for (const node of nodes) {
-          const newUrl = target.replace(/^https:\/\/img\d\.doubanio\.com/, node);
+      for (const node of nodes) {
+        const newUrl = `https://${node.replace(/^https?:\/\//, '')}${path}`;
+        try {
           finalResp = await fetch(newUrl, { cf: { image: { width: 600, quality: 75 } } });
           if (finalResp.ok) break;
+        } catch (e) {
+          continue;
         }
-        if (!finalResp || !finalResp.ok) return new Response("豆瓣所有节点请求失败", { status: 502 });
-      } else {
-        finalResp = await fetch(target);
       }
+      if (!finalResp || !finalResp.ok) return new Response("豆瓣所有节点请求失败", { status: 502 });
 
-      const ext = fileName.split(".").pop().toLowerCase();
+      // Content-Type 设置
+      const ext = path.split(".").pop().toLowerCase();
       const mimeTypes = { jpg:"image/jpeg", jpeg:"image/jpeg", png:"image/png", webp:"image/webp", gif:"image/gif", avif:"image/avif" };
       respHeaders.set("Content-Type", mimeTypes[ext] || "application/octet-stream");
       respHeaders.set("Accept-Ranges", "bytes");
