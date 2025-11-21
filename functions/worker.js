@@ -1,3 +1,5 @@
+const ALLOWED_ORIGIN = "https://YOUR_DOMAIN.COM";  // ← 保留下来的，未启用
+
 const NODES = [
   'https://img1.doubanio.com',
   'https://img2.doubanio.com',
@@ -5,55 +7,54 @@ const NODES = [
   'https://img9.doubanio.com'
 ];
 
-// 你的服务器 IP，只有这个 IP 可以访问
-//const ALLOWED_IP = '你的服务器IP';
-
 export default {
   async fetch(request) {
-    const clientIP = request.headers.get('cf-connecting-ip');
-    if (clientIP !== ALLOWED_IP) {
-      return new Response('Forbidden', { status: 403 });
+    const origin = request.headers.get("Origin") || "";
+
+    // 🔒 防盗链（当前禁用，只需取消注释即可启用）
+    /*
+    if (origin && origin !== ALLOWED_ORIGIN) {
+      return new Response("Forbidden", { status: 403 });
     }
+    */
 
     const url = new URL(request.url);
-    const targetUrl = url.searchParams.get('url');
+    const targetUrl = url.searchParams.get("url");
     if (!targetUrl) {
-      return new Response('缺少 url 参数', { status: 400 });
+      return new Response("缺少 url 参数", { status: 400 });
     }
 
-    // 随机节点顺序，保证轮换
     const nodes = [...NODES].sort(() => Math.random() - 0.5);
 
     for (const node of nodes) {
       try {
         const newUrl = targetUrl.replace(/^https:\/\/img\d\.doubanio\.com/, node);
 
-        // 使用 Cloudflare 图像优化
-        const cfOptions = {
+        const res = await fetch(newUrl, {
           cf: {
             image: {
-              width: 600,       // 压缩宽度，可按需调整
-              quality: 75       // 压缩质量
+              width: 600,   // ← 压缩宽度
+              quality: 70   // ← 压缩质量
             }
           }
-        };
+        });
 
-        const res = await fetch(newUrl, cfOptions);
         if (!res.ok) continue;
 
-        // 设置 CORS + 缓存
-        const headers = new Headers(res.headers);
-        headers.set('Access-Control-Allow-Origin', '*');
-        headers.set('Cache-Control', 'public, max-age=31536000'); // 1 年缓存
+        // 重新写 headers 避免 Worker 报错
+        const headers = new Headers();
+        headers.set("Content-Type", res.headers.get("Content-Type") || "image/jpeg");
+        headers.set("Access-Control-Allow-Origin", "*");   // 当前全开放
+        headers.set("Cache-Control", "public, max-age=31536000");
 
         const body = await res.arrayBuffer();
         return new Response(body, { status: 200, headers });
-      } catch (e) {
-        // 节点失败尝试下一个
+
+      } catch (err) {
         continue;
       }
     }
 
-    return new Response('所有节点请求失败', { status: 502 });
+    return new Response("所有节点都失败了", { status: 502 });
   }
 };
