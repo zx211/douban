@@ -19,13 +19,10 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname; // /view/photo/.../public/xxx.jpg
 
-    if (!path) {
-      return new Response("缺少路径", { status: 400 });
-    }
+    if (!path) return new Response("缺少路径", { status: 400 });
 
     const reqHeaders = new Headers(request.headers);
-    // 删除 Range 避免前端分段请求失败
-    reqHeaders.delete("Range");
+    reqHeaders.delete("Range"); // 避免前端分段加载失败
 
     let finalResp;
 
@@ -35,36 +32,23 @@ export default {
       for (const node of nodes) {
         try {
           const newUrl = node + path;
-          finalResp = await fetch(newUrl, {
-            method: request.method,
-            headers: reqHeaders
-            // 不再启用 Cloudflare image 压缩，保证第一次加载可用
-          });
+          finalResp = await fetch(newUrl, { method: request.method, headers: reqHeaders });
           if (finalResp.ok) break;
         } catch (e) {
           continue;
         }
       }
-      if (!finalResp || !finalResp.ok) {
-        return new Response("豆瓣所有节点请求失败", { status: 502 });
-      }
+      if (!finalResp || !finalResp.ok) return new Response("豆瓣节点请求失败", { status: 502 });
     } else {
-      // 非豆瓣图片直接转发
-      const target = url.searchParams.get("url");
-      if (!target) return new Response("缺少 ?url=", { status: 400 });
-      finalResp = await fetch(target, {
-        method: request.method,
-        headers: reqHeaders
-      });
+      return new Response("不支持的路径", { status: 400 });
     }
 
-    // ================= 响应头优化 =================
     const respHeaders = new Headers(finalResp.headers);
     const ext = path.split('.').pop().toLowerCase();
     respHeaders.set("Content-Type", MIME_MAP[ext] || 'image/jpeg');
     respHeaders.set("Access-Control-Allow-Origin", "*");
-    respHeaders.set("Cache-Control", "public, max-age=31536000"); // 缓存 1 年
-    respHeaders.delete("Accept-Ranges"); // 删除 Range 避免前端分段加载失败
+    respHeaders.set("Cache-Control", "public, max-age=31536000");
+    respHeaders.delete("Accept-Ranges"); // 避免分段请求失败
 
     return new Response(finalResp.body, {
       status: finalResp.status,
