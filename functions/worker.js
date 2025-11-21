@@ -1,60 +1,70 @@
-const ALLOWED_ORIGIN = "https://YOUR_DOMAIN.COM";  // ← 保留下来的，未启用
-
-const NODES = [
-  'https://img1.doubanio.com',
-  'https://img2.doubanio.com',
-  'https://img3.doubanio.com',
-  'https://img9.doubanio.com'
-];
-
 export default {
-  async fetch(request) {
-    const origin = request.headers.get("Origin") || "";
-
-    // 🔒 防盗链（当前禁用，只需取消注释即可启用）
-    /*
-    if (origin && origin !== ALLOWED_ORIGIN) {
-      return new Response("Forbidden", { status: 403 });
-    }
-    */
+  async fetch(request, env) {
 
     const url = new URL(request.url);
-    const targetUrl = url.searchParams.get("url");
-    if (!targetUrl) {
-      return new Response("缺少 url 参数", { status: 400 });
+    const target = url.searchParams.get("url");
+
+    if (!target) {
+      return new Response("缺少 ?url=", { status: 400 });
     }
 
-    const nodes = [...NODES].sort(() => Math.random() - 0.5);
-
-    for (const node of nodes) {
-      try {
-        const newUrl = targetUrl.replace(/^https:\/\/img\d\.doubanio\.com/, node);
-
-        const res = await fetch(newUrl, {
-          cf: {
-            image: {
-              width: 600,   // ← 压缩宽度
-              quality: 70   // ← 压缩质量
-            }
-          }
-        });
-
-        if (!res.ok) continue;
-
-        // 重新写 headers 避免 Worker 报错
-        const headers = new Headers();
-        headers.set("Content-Type", res.headers.get("Content-Type") || "image/jpeg");
-        headers.set("Access-Control-Allow-Origin", "*");   // 当前全开放
-        headers.set("Cache-Control", "public, max-age=31536000");
-
-        const body = await res.arrayBuffer();
-        return new Response(body, { status: 200, headers });
-
-      } catch (err) {
-        continue;
+    // ========== (A) 防盗链：目前默认关闭 ==========
+    const ENABLE_ANTIHOTLINK = false;  // 你要求“保留但不启用”
+    const ALLOW_IP = [];               // 未来可加 IP 白名单
+    if (ENABLE_ANTIHOTLINK) {
+      const referer = request.headers.get("Referer") || "";
+      let allowed = false;
+      for (let ip of ALLOW_IP) {
+        if (referer.includes(ip)) allowed = true;
+      }
+      if (!allowed) {
+        return new Response("Hotlink blocked", { status: 403 });
       }
     }
 
-    return new Response("所有节点都失败了", { status: 502 });
+    // ========== (B) 选项 2：强制爱奇艺只能代理图片 ==========
+    if (target.includes("iqiyipic.com")) {
+
+      // 检测是否是图片扩展名
+      const imageExt = target.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/);
+
+      if (!imageExt) {
+        return new Response("仅允许代理爱奇艺图片文件", { status: 403 });
+      }
+    }
+
+    // ========== (C) 选项 3：只允许常见图片格式 ==========
+
+    const allowedExt = /\.(jpg|jpeg|png|webp|gif|avif)$/i;
+    const noExt = target.split("/").pop().split("?")[0];
+
+    if (!allowedExt.test(noExt)) {
+      return new Response("仅支持图片格式（jpg/png/webp/avif/gif）", { status: 400 });
+    }
+
+    // ========== (D) 选项 4：自动支持 Range（可开关） ==========
+    const ENABLE_RANGE = true;
+
+    const headers = new Headers(request.headers);
+    if (!ENABLE_RANGE) {
+      headers.delete("Range");
+    }
+
+    // 请求源图片
+    const resp = await fetch(target, {
+      method: request.method,
+      headers,
+    });
+
+    // 自动添加 Accept-Ranges
+    const newHeaders = new Headers(resp.headers);
+    if (ENABLE_RANGE) {
+      newHeaders.set("Accept-Ranges", "bytes");
+    }
+
+    return new Response(resp.body, {
+      status: resp.status,
+      headers: newHeaders
+    });
   }
-};
+}
