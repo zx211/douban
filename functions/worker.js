@@ -40,11 +40,14 @@ export default {
 
           if (finalResp.ok) break;
         } catch (e) {
-          console.error('请求失败，尝试其他节点:', e);
+          console.error(`请求失败，节点: ${node}, 错误信息: ${e}`);
           continue;
         }
       }
-      if (!finalResp || !finalResp.ok) return new Response("豆瓣节点请求失败", { status: 502 });
+      if (!finalResp || !finalResp.ok) {
+        console.error('豆瓣节点请求失败，所有节点尝试均失败');
+        return new Response("豆瓣节点请求失败", { status: 502 });
+      }
     } else {
       return new Response("不支持的路径", { status: 400 });
     }
