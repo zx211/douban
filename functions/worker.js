@@ -14,67 +14,59 @@ const MIME_MAP = {
   avif: 'image/avif'
 };
 
+const COOKIE = "bid=Q3fMtP9xyzY";  // ← 用你浏览器里的匿名 Cookie 替换
+
 export default {
-  async fetch(request) {
+  async fetch(request, env, ctx) {
+
     const url = new URL(request.url);
-    const path = url.pathname; // /view/photo/.../public/xxx.jpg
+    const path = url.pathname;
 
-    if (!path) return new Response("缺少路径", { status: 400 });
-
-    const reqHeaders = new Headers(request.headers);
-    reqHeaders.delete("Range"); // 避免前端分段加载失败
-
-    let finalResp;
-
-    // 豆瓣图片节点轮换
-    if (/^\/view\/photo\/.*\/public\/.*\.(jpg|jpeg|png|webp|gif|avif)$/i.test(path)) {
-      const nodes = [...DOUBAN_NODES].sort(() => Math.random() - 0.5);
-      for (const node of nodes) {
-        try {
-          const newUrl = node + path;
-          // 模拟浏览器请求头，避免被豆瓣拦截
-          finalResp = await fetch(newUrl, { 
-            method: request.method,
-            headers: reqHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36') 
-          });
-
-          if (finalResp.ok) break;
-        } catch (e) {
-          console.error(`请求失败，节点: ${node}, 错误信息: ${e}`);
-          continue;
-        }
-      }
-      if (!finalResp || !finalResp.ok) {
-        console.error('豆瓣节点请求失败，所有节点尝试均失败');
-        return new Response("豆瓣节点请求失败", { status: 502 });
-      }
-    } else {
-      return new Response("不支持的路径", { status: 400 });
+    if (!/^\/view\/photo\/.*\/public\/.*\.(jpg|jpeg|png|webp|gif|avif)$/i.test(path)) {
+      return new Response("路径不支持", { status: 400 });
     }
 
-    const respHeaders = new Headers(finalResp.headers);
-    const ext = path.split('.').pop().toLowerCase();
-    respHeaders.set("Content-Type", MIME_MAP[ext] || 'image/jpeg');
-
-    // 添加 CORS 头部，允许任何来源访问
-    respHeaders.set("Access-Control-Allow-Origin", "*");
-
-    // 设置缓存头部，缓存1年
-    respHeaders.set("Cache-Control", "public, max-age=31536000"); // 1年缓存
-
-    // 删除 Accept-Ranges，避免分段请求问题
-    respHeaders.delete("Accept-Ranges");
-
-    // 设置缓存策略（这里使用了 Cloudflare Worker 的缓存）
     const cache = caches.default;
-    // 尝试从缓存中读取图片
-    let cachedResponse = await cache.match(request);
-    if (!cachedResponse) {
-      // 如果缓存未命中，则缓存到 Cloudflare CDN
-      cachedResponse = new Response(finalResp.body, { status: finalResp.status, headers: respHeaders });
-      event.waitUntil(cache.put(request, cachedResponse.clone())); // 缓存图片
+    let cached = await cache.match(request);
+    if (cached) return cached;
+
+    let finalResp = null;
+
+    const nodes = [...DOUBAN_NODES].sort(() => Math.random() - 0.5);
+    for (const node of nodes) {
+      const newUrl = node + path;
+
+      try {
+        const headers = {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+          "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+          "Referer": "https://movie.douban.com/",
+          "Cookie": COOKIE
+        };
+
+        const resp = await fetch(newUrl, { headers });
+
+        if (resp.ok) {
+          finalResp = resp;
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
     }
 
-    return cachedResponse;
+    if (!finalResp) return new Response("豆瓣请求失败", { status: 502 });
+
+    const ext = path.split('.').pop().toLowerCase();
+    const h = new Headers(finalResp.headers);
+    h.set("Content-Type", MIME_MAP[ext] || "image/jpeg");
+    h.set("Access-Control-Allow-Origin", "*");
+    h.set("Cache-Control", "public, max-age=31536000");
+    h.delete("Accept-Ranges");
+
+    const response = new Response(finalResp.body, { headers: h });
+    ctx.waitUntil(cache.put(request, response.clone()));
+
+    return response;
   }
 };
