@@ -32,7 +32,12 @@ export default {
       for (const node of nodes) {
         try {
           const newUrl = node + path;
-          finalResp = await fetch(newUrl, { method: request.method, headers: reqHeaders });
+          // 模拟浏览器请求头，避免被豆瓣拦截
+          finalResp = await fetch(newUrl, { 
+            method: request.method,
+            headers: reqHeaders.set('User-Agent', 'Mozilla/5.0') 
+          });
+
           if (finalResp.ok) break;
         } catch (e) {
           continue;
@@ -46,13 +51,26 @@ export default {
     const respHeaders = new Headers(finalResp.headers);
     const ext = path.split('.').pop().toLowerCase();
     respHeaders.set("Content-Type", MIME_MAP[ext] || 'image/jpeg');
-    respHeaders.set("Access-Control-Allow-Origin", "*");
-    respHeaders.set("Cache-Control", "public, max-age=31536000");
-    respHeaders.delete("Accept-Ranges"); // 避免分段请求失败
 
-    return new Response(finalResp.body, {
-      status: finalResp.status,
-      headers: respHeaders
-    });
+    // 添加 CORS 头部，允许任何来源访问
+    respHeaders.set("Access-Control-Allow-Origin", "*");
+
+    // 设置缓存头部，缓存1年
+    respHeaders.set("Cache-Control", "public, max-age=31536000"); // 1年缓存
+
+    // 删除 Accept-Ranges，避免分段请求问题
+    respHeaders.delete("Accept-Ranges");
+
+    // 设置缓存策略（这里使用了 Cloudflare Worker 的缓存）
+    const cache = caches.default;
+    // 尝试从缓存中读取图片
+    let cachedResponse = await cache.match(request);
+    if (!cachedResponse) {
+      // 如果缓存未命中，则缓存到 Cloudflare CDN
+      cachedResponse = new Response(finalResp.body, { status: finalResp.status, headers: respHeaders });
+      event.waitUntil(cache.put(request, cachedResponse.clone())); // 缓存图片
+    }
+
+    return cachedResponse;
   }
 };
