@@ -14,20 +14,30 @@ const MIME_MAP = {
   avif: 'image/avif'
 };
 
-// 使用你提供的第二个令牌
-const ACCESS_TOKEN = '0b2bdeda43b5688921839c8ecb20399b';  // 直接使用这个令牌
+// 你的豆瓣 API 令牌
+const ACCESS_TOKEN = '0b2bdeda43b5688921839c8ecb20399b';
+
+// 允许访问的域名（你改这里）
+const ALLOWED_REFERERS = [
+  'yourdomain.com',
+  'www.yourdomain.com'
+];
 
 export default {
   async fetch(request, env, ctx) {
+    // 域名限制
+    const referer = request.headers.get("Referer") || "";
+    if (!isAllowedReferer(referer)) {
+      return new Response("Forbidden", { status: 403 });
+    }
+
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // 判断是否是图片请求路径
     if (/^\/view\/photo\/.*\/public\/.*\.(jpg|jpeg|png|webp|gif|avif)$/i.test(path)) {
       return handleImageRequest(path, request, ctx);
     }
 
-    // 判断是否是 API 请求
     if (path.startsWith('/v2/movie/subject')) {
       return handleApiRequest(path, request, ctx);
     }
@@ -36,49 +46,54 @@ export default {
   }
 };
 
+// 判断域名是否允许
+function isAllowedReferer(referer) {
+  try {
+    const domain = new URL(referer).hostname;
+    return ALLOWED_REFERERS.includes(domain);
+  } catch (e) {
+    return false;
+  }
+}
+
 // 处理图片请求
 async function handleImageRequest(path, request, ctx) {
   const cache = caches.default;
   let cached = await cache.match(request);
-  if (cached) return cached;  // 返回缓存
+  if (cached) return cached;
 
   let finalResp = null;
-
   const nodes = [...DOUBAN_NODES].sort(() => Math.random() - 0.5);
-  for (const node of nodes) {
-    const newUrl = node + path;
 
+  for (const node of nodes) {
     try {
+      const newUrl = node + path;
       const headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "image/*",
         "Referer": "https://movie.douban.com/",
-        "Authorization": `Bearer ${ACCESS_TOKEN}`,  // 加入 API 令牌
+        "Authorization": `Bearer ${ACCESS_TOKEN}`
       };
 
       const resp = await fetch(newUrl, { headers });
-
       if (resp.ok) {
         finalResp = resp;
         break;
       }
-    } catch (e) {
-      continue;
-    }
+    } catch (e) {}
   }
 
-  if (!finalResp) return new Response("豆瓣图片请求失败", { status: 502 });
+  if (!finalResp) return new Response("豆瓣节点请求失败", { status: 502 });
 
   const ext = path.split('.').pop().toLowerCase();
   const h = new Headers(finalResp.headers);
   h.set("Content-Type", MIME_MAP[ext] || "image/jpeg");
   h.set("Access-Control-Allow-Origin", "*");
-  h.set("Cache-Control", "public, max-age=31536000");  // 缓存1年
+  h.set("Cache-Control", "public, max-age=31536000");
   h.delete("Accept-Ranges");
 
   const response = new Response(finalResp.body, { headers: h });
-  ctx.waitUntil(cache.put(request, response.clone()));  // 缓存图片
-
+  ctx.waitUntil(cache.put(request, response.clone()));
   return response;
 }
 
@@ -86,12 +101,13 @@ async function handleImageRequest(path, request, ctx) {
 async function handleApiRequest(path, request, ctx) {
   const apiUrl = `https://api.douban.com${path}`;
   const headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    "User-Agent": "Mozilla/5.0",
     "Referer": "https://movie.douban.com/",
-    "Authorization": `Bearer ${ACCESS_TOKEN}`,  // 加入 API 令牌
+    "Authorization": `Bearer ${ACCESS_TOKEN}`
   };
 
-  const finalResp = await fetch(apiUrl, { method: 'GET', headers });
+  const finalResp = await fetch(apiUrl, { headers });
+
   if (!finalResp.ok) {
     return new Response("API 请求失败", { status: 502 });
   }
