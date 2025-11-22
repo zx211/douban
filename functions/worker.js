@@ -14,59 +14,90 @@ const MIME_MAP = {
   avif: 'image/avif'
 };
 
-const COOKIE = "bid=Q3fMtP9xyzY";  // ← 用你浏览器里的匿名 Cookie 替换
+// 使用匿名 Cookies，确保安全
+const COOKIE = "bid=Uxr893puho8";  // ← 用你浏览器里的匿名 Cookie 替换
 
 export default {
   async fetch(request, env, ctx) {
-
     const url = new URL(request.url);
     const path = url.pathname;
 
-    if (!/^\/view\/photo\/.*\/public\/.*\.(jpg|jpeg|png|webp|gif|avif)$/i.test(path)) {
-      return new Response("路径不支持", { status: 400 });
+    // 判断是否是图片请求路径
+    if (/^\/view\/photo\/.*\/public\/.*\.(jpg|jpeg|png|webp|gif|avif)$/i.test(path)) {
+      return handleImageRequest(path, request, ctx);
     }
 
-    const cache = caches.default;
-    let cached = await cache.match(request);
-    if (cached) return cached;
-
-    let finalResp = null;
-
-    const nodes = [...DOUBAN_NODES].sort(() => Math.random() - 0.5);
-    for (const node of nodes) {
-      const newUrl = node + path;
-
-      try {
-        const headers = {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-          "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-          "Referer": "https://movie.douban.com/",
-          "Cookie": COOKIE
-        };
-
-        const resp = await fetch(newUrl, { headers });
-
-        if (resp.ok) {
-          finalResp = resp;
-          break;
-        }
-      } catch (e) {
-        continue;
-      }
+    // 判断是否是 API 请求
+    if (path.startsWith('/v2/movie/subject')) {
+      return handleApiRequest(path, request, ctx);
     }
 
-    if (!finalResp) return new Response("豆瓣请求失败", { status: 502 });
-
-    const ext = path.split('.').pop().toLowerCase();
-    const h = new Headers(finalResp.headers);
-    h.set("Content-Type", MIME_MAP[ext] || "image/jpeg");
-    h.set("Access-Control-Allow-Origin", "*");
-    h.set("Cache-Control", "public, max-age=31536000");
-    h.delete("Accept-Ranges");
-
-    const response = new Response(finalResp.body, { headers: h });
-    ctx.waitUntil(cache.put(request, response.clone()));
-
-    return response;
+    return new Response("路径不支持", { status: 400 });
   }
 };
+
+// 处理图片请求
+async function handleImageRequest(path, request, ctx) {
+  const cache = caches.default;
+  let cached = await cache.match(request);
+  if (cached) return cached;  // 返回缓存
+
+  let finalResp = null;
+
+  const nodes = [...DOUBAN_NODES].sort(() => Math.random() - 0.5);
+  for (const node of nodes) {
+    const newUrl = node + path;
+
+    try {
+      const headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "Referer": "https://movie.douban.com/",
+        "Cookie": COOKIE
+      };
+
+      const resp = await fetch(newUrl, { headers });
+
+      if (resp.ok) {
+        finalResp = resp;
+        break;
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+
+  if (!finalResp) return new Response("豆瓣图片请求失败", { status: 502 });
+
+  const ext = path.split('.').pop().toLowerCase();
+  const h = new Headers(finalResp.headers);
+  h.set("Content-Type", MIME_MAP[ext] || "image/jpeg");
+  h.set("Access-Control-Allow-Origin", "*");
+  h.set("Cache-Control", "public, max-age=31536000");  // 缓存1年
+  h.delete("Accept-Ranges");
+
+  const response = new Response(finalResp.body, { headers: h });
+  ctx.waitUntil(cache.put(request, response.clone()));  // 缓存图片
+
+  return response;
+}
+
+// 处理 API 请求
+async function handleApiRequest(path, request, ctx) {
+  const apiUrl = `https://api.douban.com${path}`;
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    "Referer": "https://movie.douban.com/",
+    "Cookie": COOKIE
+  };
+
+  const finalResp = await fetch(apiUrl, { method: 'GET', headers });
+  if (!finalResp.ok) {
+    return new Response("API 请求失败", { status: 502 });
+  }
+
+  const respHeaders = new Headers(finalResp.headers);
+  respHeaders.set("Access-Control-Allow-Origin", "*");
+
+  return new Response(finalResp.body, { status: finalResp.status, headers: respHeaders });
+}
