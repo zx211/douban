@@ -35,11 +35,12 @@ export default {
           // 模拟浏览器请求头，避免被豆瓣拦截
           finalResp = await fetch(newUrl, { 
             method: request.method,
-            headers: reqHeaders.set('User-Agent', 'Mozilla/5.0') 
+            headers: reqHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36') 
           });
 
           if (finalResp.ok) break;
         } catch (e) {
+          console.error('请求失败，尝试其他节点:', e);
           continue;
         }
       }
