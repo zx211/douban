@@ -14,8 +14,8 @@ const MIME_MAP = {
   avif: 'image/avif'
 };
 
-// 使用匿名 Cookies，确保安全
-const COOKIE = "bid=Uxr893puho8";  // ← 用你浏览器里的匿名 Cookie 替换
+// 使用你提供的第二个令牌
+const ACCESS_TOKEN = '0b2bdeda43b5688921839c8ecb20399b';  // 直接使用这个令牌
 
 export default {
   async fetch(request, env, ctx) {
@@ -53,7 +53,7 @@ async function handleImageRequest(path, request, ctx) {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
         "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
         "Referer": "https://movie.douban.com/",
-        "Cookie": COOKIE
+        "Authorization": `Bearer ${ACCESS_TOKEN}`,  // 加入 API 令牌
       };
 
       const resp = await fetch(newUrl, { headers });
@@ -88,7 +88,7 @@ async function handleApiRequest(path, request, ctx) {
   const headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     "Referer": "https://movie.douban.com/",
-    "Cookie": COOKIE
+    "Authorization": `Bearer ${ACCESS_TOKEN}`,  // 加入 API 令牌
   };
 
   const finalResp = await fetch(apiUrl, { method: 'GET', headers });
