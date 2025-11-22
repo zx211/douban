@@ -19,8 +19,9 @@ const ACCESS_TOKEN = '0b2bdeda43b5688921839c8ecb20399b';
 
 // 允许访问的域名（你改这里）
 const ALLOWED_REFERERS = [
-  'yourdomain.com',
-  'www.yourdomain.com'
+  'guochanju.com',
+  'www.leys.cc',
+  'www.pianji.cc'
 ];
 
 export default {
